@@ -12,8 +12,6 @@ def _is_valid_email(email: str) -> bool:
 
 
 def _hash_password(password: str, salt_hex: str = None):
-    """Gera (salt_hex, hash_hex) usando PBKDF2-HMAC-SHA256. Se salt_hex for passado,
-    reaproveita o mesmo salt (usado na verificação de login)."""
     salt = os.urandom(16) if salt_hex is None else binascii.unhexlify(salt_hex)
     hash_bytes = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100_000)
     return binascii.hexlify(salt).decode(), binascii.hexlify(hash_bytes).decode()
@@ -25,17 +23,13 @@ def _verify_password(password: str, salt_hex: str, hash_hex: str) -> bool:
 
 
 def login_gate():
-    """Mostra a tela de login/cadastro se o usuário ainda não estiver logado nesta sessão.
-    Retorna o e-mail do usuário logado (usado para separar os dados de cada pessoa).
-    Chame no topo de TODAS as páginas, logo após st.set_page_config."""
-
     if st.session_state.get("user_email"):
         return st.session_state["user_email"]
 
     db.init_db()
 
     st.markdown(
-        "<h1 style='text-align:center;'>🔒 Controle de Investimentos</h1>",
+        "<h1 style='text-align:center;'>Controle de Investimentos</h1>",
         unsafe_allow_html=True,
     )
 
@@ -60,7 +54,7 @@ def login_gate():
                             st.rerun()
 
         with tab_criar:
-            st.caption("Cada pessoa cria sua própria conta e define sua própria senha. Seus dados ficam só seus.")
+            st.caption("Cada pessoa cria sua própria conta e define sua própria senha.")
             with st.form("signup_form"):
                 novo_email = st.text_input("E-mail", key="signup_email")
                 nova_senha = st.text_input("Crie uma senha", type="password", key="signup_pass")
@@ -77,7 +71,8 @@ def login_gate():
                         salt, hash_ = _hash_password(nova_senha)
                         ok = db.add_user(novo_email.strip().lower(), salt, hash_)
                         if ok:
-                            st.success("Conta criada! Vá na aba 'Entrar' para acessar.")
+                            st.session_state["user_email"] = novo_email.strip().lower()
+                            st.rerun()
                         else:
                             st.error("Já existe uma conta com esse e-mail.")
 
@@ -85,13 +80,12 @@ def login_gate():
 
 
 def sidebar_user_box():
-    """Mostra o usuário logado e botão de sair na barra lateral."""
     email = st.session_state.get("user_email")
     if not email:
         return
     with st.sidebar:
         st.divider()
-        st.caption(f"👤 Logado como **{email}**")
+        st.caption(f"Logado como {email}")
         if st.button("Sair", use_container_width=True):
             del st.session_state["user_email"]
             st.rerun()

@@ -6,29 +6,62 @@ import db
 from api import get_prices
 from auth import login_gate, sidebar_user_box
 from style import apply_style, tabela_carteira
+from export import dataframes_to_excel_bytes
 
-st.set_page_config(page_title="Carteira Principal", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Carteira Principal", page_icon="", layout="wide")
 apply_style()
 db.init_db()
 user_email = login_gate()
 sidebar_user_box()
 
 
-from export import dataframes_to_excel_bytes
-...
+@st.dialog("Confirmar exclusão")
+def confirmar_exclusao_ativo(ticker, id_):
+    st.write(f"Tem certeza que deseja excluir **{ticker}**? Essa ação não pode ser desfeita.")
+    col1, col2 = st.columns(2)
+    if col1.button("Cancelar", use_container_width=True):
+        st.rerun()
+    if col2.button("Excluir", type="primary", use_container_width=True):
+        db.delete_ativo(user_email, id_)
+        st.success(f"{ticker} excluído!")
+        st.rerun()
+
+
+@st.dialog("Confirmar exclusão")
+def confirmar_exclusao_renda_fixa(nome, id_):
+    st.write(f"Tem certeza que deseja excluir **{nome}**? Essa ação não pode ser desfeita.")
+    col1, col2 = st.columns(2)
+    if col1.button("Cancelar", use_container_width=True, key="cancelar_rf"):
+        st.rerun()
+    if col2.button("Excluir", type="primary", use_container_width=True, key="confirmar_rf"):
+        db.delete_renda_fixa(user_email, id_)
+        st.success(f"{nome} excluído!")
+        st.rerun()
+
+
 st.title("Carteira Principal")
+
+# ---------------------------------------------------------
+# Busca os dados UMA VEZ só no começo da execução da página
+# e reaproveita em todos os blocos abaixo (tabela, exclusão,
+# resumo calculado e exportação) - evita chamadas repetidas
+# ao banco, que agora é remoto (Turso) e tem custo de rede.
+# ---------------------------------------------------------
+ativos = db.get_ativos(user_email)
+renda_fixa = db.get_renda_fixa(user_email)
 
 col_titulo, col_download = st.columns([5, 1])
 with col_download:
     excel_bytes = dataframes_to_excel_bytes({
-        "Ativos": pd.DataFrame(db.get_ativos(user_email)),
-        "Renda Fixa": pd.DataFrame(db.get_renda_fixa(user_email)),
+        "Ativos": pd.DataFrame(ativos),
+        "Renda Fixa": pd.DataFrame(renda_fixa),
     })
     st.download_button(
         "Baixar (Excel)", data=excel_bytes,
         file_name="carteira_principal.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
 tab_acoes_fiis, tab_renda_fixa = st.tabs(["Ações e FIIs", "Renda Fixa"])
 
 # =========================================================
@@ -38,7 +71,6 @@ with tab_acoes_fiis:
     st.subheader("Cadastro de ativos")
     st.caption("Preencha ticker, tipo, setor, quantidade, preço médio, preço teto e o dividendo pago nos últimos 12 meses por cota/ação. O resto é calculado automaticamente.")
 
-    ativos = db.get_ativos(user_email)
     df_edit = pd.DataFrame(ativos) if ativos else pd.DataFrame(
         columns=["ticker", "tipo", "setor", "quantidade", "preco_medio", "preco_teto", "dividendo_anual"]
     )
@@ -92,22 +124,19 @@ with tab_acoes_fiis:
                 label_visibility="collapsed",
                 key="select_del_ativo",
             )
-            if st.button("Excluir", use_container_width=True):
+            if st.button("Excluir", use_container_width=True, key="btn_excluir_ativo"):
                 alvo = next(a for a in ativos if a["ticker"] == ticker_selecionado)
-                db.delete_ativo(user_email, alvo["id"])
-                st.success(f"{ticker_selecionado} excluído!")
-                st.rerun()
+                confirmar_exclusao_ativo(alvo["ticker"], alvo["id"])
 
     st.divider()
     st.subheader("Resumo da carteira")
 
-    ativos = db.get_ativos(user_email)
     if not ativos:
         st.info("Cadastre seus ativos acima para ver os cálculos.")
     else:
         tickers = [a["ticker"] for a in ativos]
 
-        if st.button("🔄 Atualizar cotações"):
+        if st.button("Atualizar cotações"):
             get_prices.clear()
 
         with st.spinner("Buscando cotações atuais..."):
@@ -117,9 +146,7 @@ with tab_acoes_fiis:
         if sem_cotacao:
             st.warning(
                 f"Não consegui buscar a cotação atual de: **{', '.join(sem_cotacao)}**. "
-                "Eles ficam com o preço médio como valor atual (valorização/margem zeradas) até a próxima tentativa. "
-                "Possíveis causas: ticker digitado errado, ativo pouco líquido, ou o Yahoo Finance limitou "
-                "temporariamente as requisições (nesse caso, espere 1-2 minutos e clique em '🔄 Atualizar cotações')."
+                "Eles ficam com o preço médio como valor atual (valorização/margem zeradas) até a próxima tentativa."
             )
 
         linhas = []
@@ -141,7 +168,7 @@ with tab_acoes_fiis:
             )
             yoc_m = yoc / 12
             linhas.append({
-                "Tipo": a["tipo"], "Ativos": a["ticker"], "Setor": a["setor"] or "—", "Quant.": a["quantidade"],
+                "Tipo": a["tipo"], "Ativos": a["ticker"], "Setor": a["setor"] or "-", "Quant.": a["quantidade"],
                 "Preço médio": a["preco_medio"], "Valor Investido": valor_investido,
                 "Preço atual": preco_atual or a["preco_medio"],
                 "Valor atual": valor_atual, "Valorização": valorizacao_pct,
@@ -182,7 +209,6 @@ with tab_acoes_fiis:
         col2.metric("Total em FIIs", f"R$ {total_fiis:,.2f}")
         col3.metric("Total Ações + FIIs", f"R$ {(total_acoes + total_fiis):,.2f}")
         col4.metric("Média YoC", f"{media_yoc:.2f}%")
-        
 
 # =========================================================
 # ABA: RENDA FIXA
@@ -190,44 +216,58 @@ with tab_acoes_fiis:
 with tab_renda_fixa:
     st.subheader("Cadastro de renda fixa")
 
-    rf = db.get_renda_fixa(user_email)
-    df_rf = pd.DataFrame(rf) if rf else pd.DataFrame(
+    df_rf = pd.DataFrame(renda_fixa) if renda_fixa else pd.DataFrame(
         columns=["nome", "categoria", "valor_investido", "taxa", "data_aplicacao"]
     )
     if not df_rf.empty:
         df_rf = df_rf[["nome", "categoria", "valor_investido", "taxa", "data_aplicacao"]]
 
-    edited_rf = st.data_editor(
-        df_rf,
-        num_rows="dynamic",
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "nome": st.column_config.TextColumn("Nome/Instituição", required=True),
-            "categoria": st.column_config.SelectboxColumn("Categoria", options=["CDI", "FGTS", "Outro"], required=True),
-            "valor_investido": st.column_config.NumberColumn("Valor investido", min_value=0.0, format="R$ %.2f", required=True),
-            "taxa": st.column_config.TextColumn("Taxa", help="Ex: 110% do CDI, IPCA + 6%"),
-            "data_aplicacao": st.column_config.TextColumn("Data aplicação", help="AAAA-MM-DD"),
-        },
-        key="editor_rf",
-    )
+    col_tabela_rf, col_excluir_rf = st.columns([4, 1])
 
-    if st.button("💾 Salvar renda fixa", type="primary"):
-        lista = []
-        for _, row in edited_rf.iterrows():
-            if pd.isna(row.get("nome")) or str(row.get("nome")).strip() == "":
-                continue
-            lista.append({
-                "nome": str(row["nome"]).strip(),
-                "categoria": row.get("categoria") or "Outro",
-                "valor_investido": float(row.get("valor_investido") or 0),
-                "taxa": row.get("taxa") or "",
-                "data_aplicacao": row.get("data_aplicacao") or str(date.today()),
-            })
-        db.replace_renda_fixa(user_email, lista)
-        st.success("Renda fixa salva!")
-        st.rerun()
+    with col_tabela_rf:
+        edited_rf = st.data_editor(
+            df_rf,
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "nome": st.column_config.TextColumn("Nome/Instituição", required=True),
+                "categoria": st.column_config.SelectboxColumn("Categoria", options=["CDI", "FGTS", "Outro"], required=True),
+                "valor_investido": st.column_config.NumberColumn("Valor investido", min_value=0.0, format="R$ %.2f", required=True),
+                "taxa": st.column_config.TextColumn("Taxa", help="Ex: 110% do CDI, IPCA + 6%"),
+                "data_aplicacao": st.column_config.TextColumn("Data aplicação", help="AAAA-MM-DD"),
+            },
+            key="editor_rf",
+        )
 
-    rf = db.get_renda_fixa(user_email)
-    total_rf = sum(r["valor_investido"] for r in rf) if rf else 0
+        if st.button("Salvar renda fixa", type="primary"):
+            lista = []
+            for _, row in edited_rf.iterrows():
+                if pd.isna(row.get("nome")) or str(row.get("nome")).strip() == "":
+                    continue
+                lista.append({
+                    "nome": str(row["nome"]).strip(),
+                    "categoria": row.get("categoria") or "Outro",
+                    "valor_investido": float(row.get("valor_investido") or 0),
+                    "taxa": row.get("taxa") or "",
+                    "data_aplicacao": row.get("data_aplicacao") or str(date.today()),
+                })
+            db.replace_renda_fixa(user_email, lista)
+            st.success("Renda fixa salva!")
+            st.rerun()
+
+    with col_excluir_rf:
+        st.markdown("**Excluir**")
+        if renda_fixa:
+            nome_selecionado = st.selectbox(
+                "Selecione",
+                options=[r["nome"] for r in renda_fixa],
+                label_visibility="collapsed",
+                key="select_del_rf",
+            )
+            if st.button("Excluir", use_container_width=True, key="btn_excluir_rf"):
+                alvo = next(r for r in renda_fixa if r["nome"] == nome_selecionado)
+                confirmar_exclusao_renda_fixa(alvo["nome"], alvo["id"])
+
+    total_rf = sum(r["valor_investido"] for r in renda_fixa) if renda_fixa else 0
     st.metric("Total em Renda Fixa", f"R$ {total_rf:,.2f}")
