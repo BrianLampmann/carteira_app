@@ -7,7 +7,7 @@ from api import get_prices
 from auth import login_gate, sidebar_user_box
 from style import apply_style
 
-st.set_page_config(page_title="Metas", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="Metas", page_icon="", layout="wide")
 apply_style()
 db.init_db()
 user_email = login_gate()
@@ -74,10 +74,10 @@ with st.form("form_metas"):
     valor_na_reserva = c6.number_input("Valor atual guardado na reserva (R$)", min_value=0.0, format="%.2f", value=float(metas["valor_na_reserva"]))
 
     c7, c8 = st.columns(2)
-    meta_desejada = c7.number_input("Meta desejada ⭐ (R$)", min_value=0.0, format="%.2f", value=float(metas["meta_desejada"]))
-    meta_master = c8.number_input("Meta master 🚀 (R$)", min_value=0.0, format="%.2f", value=float(metas["meta_master"]))
+    meta_desejada = c7.number_input("Meta desejada (R$)", min_value=0.0, format="%.2f", value=float(metas["meta_desejada"]))
+    meta_master = c8.number_input("Meta master (R$)", min_value=0.0, format="%.2f", value=float(metas["meta_master"]))
 
-    salvar = st.form_submit_button("💾 Salvar metas", type="primary")
+    salvar = st.form_submit_button("Salvar metas", type="primary")
     if salvar:
         db.save_metas(user_email, meta_acoes_fiis, meta_fundo, int(ano_meta), custo_estimado_mensal,
                        int(reserva_meses), valor_na_reserva, meta_desejada, meta_master)
@@ -111,7 +111,7 @@ def bloco_meta(nome, atual, meta_valor, meses):
 bloco_meta("Ações/FIIs", total_acoes_fiis, metas["meta_acoes_fiis"], meses_restantes)
 bloco_meta("Renda Fixa/Fundo", total_rf, metas["meta_fundo"], meses_restantes)
 
-st.caption(f"Considerando {meses_restantes} mês(es) restante(s) até o fim de {metas['ano_meta']}. Média YoC atual da carteira: **{media_yoc:.2f}%**")
+st.caption(f"Considerando {meses_restantes} mês(es) restante(s) até o fim de {metas['ano_meta']}. Média YoC atual da carteira: {media_yoc:.2f}%")
 
 st.divider()
 
@@ -132,14 +132,14 @@ st.divider()
 st.subheader("Metas de longo prazo")
 col1, col2 = st.columns(2)
 with col1:
-    st.markdown("**Meta desejada ⭐**")
+    st.markdown("**Meta desejada**")
     pct = (total_geral / metas["meta_desejada"] * 100) if metas["meta_desejada"] else 0
     st.metric("Quão perto", f"{pct:.2f}%")
     st.progress(min(pct / 100, 1.0))
     st.caption(f"Falta: {max(100 - pct, 0):.2f}% (R$ {max(metas['meta_desejada'] - total_geral, 0):,.2f})")
 
 with col2:
-    st.markdown("**Meta master 🚀**")
+    st.markdown("**Meta master**")
     pct_m = (total_geral / metas["meta_master"] * 100) if metas["meta_master"] else 0
     st.metric("Quão perto", f"{pct_m:.2f}%")
     st.progress(min(pct_m / 100, 1.0))
@@ -162,7 +162,7 @@ if proventos:
         soma_rf = df_ano.loc[df_ano["grupo"] == "Renda Fixa", "valor"].sum()
         meses_com_dados = df_ano["data"].dt.month.nunique() or 1
 
-        with st.expander(f"📅 {ano} — Total: R$ {(soma_acoes + soma_rf):,.2f}", expanded=(ano == hoje.year)):
+        with st.expander(f"{ano} - Total: R$ {(soma_acoes + soma_rf):,.2f}", expanded=(ano == hoje.year)):
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Ações", f"R$ {soma_acoes:,.2f}")
             c2.metric("Renda Fixa", f"R$ {soma_rf:,.2f}")

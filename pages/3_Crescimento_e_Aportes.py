@@ -8,7 +8,7 @@ import db
 from auth import login_gate, sidebar_user_box
 from style import apply_style
 
-st.set_page_config(page_title="Crescimento e Aportes", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Crescimento e Aportes", page_icon="", layout="wide")
 apply_style()
 db.init_db()
 user_email = login_gate()
@@ -67,7 +67,7 @@ with tab_patrimonio:
             c1.write(row["data"])
             c2.write(f"R$ {row['valor_total']:,.2f}")
             c3.write(f"Aporte: R$ {row['aporte']:,.2f}")
-            if c4.button("🗑️", key=f"del_pat_{row['id']}"):
+            if c4.button("Excluir", key=f"del_pat_{row['id']}"):
                 db.delete_patrimonio(user_email, row["id"])
                 st.rerun()
     else:
@@ -129,7 +129,6 @@ with tab_proventos:
                                     title="Dividendos acumulados ao longo do tempo")
                 st.plotly_chart(fig_acum, use_container_width=True, key="area_dividendos_acumulado")
 
-            # YoC realizado: dividendo do mês / total investido hoje em Ações+FIIs
             ativos_atuais = db.get_ativos(user_email)
             total_investido = sum(a["quantidade"] * a["preco_medio"] for a in ativos_atuais)
             if total_investido:
@@ -138,7 +137,7 @@ with tab_proventos:
 
                 fig_yoc = px.line(
                     df_div_mes, x="mes", y=["yoc_mensal_pct", "yoc_media_12m_pct"],
-                    markers=True, title="YoC mensal realizado (%) — dividendo do mês ÷ valor investido hoje",
+                    markers=True, title="YoC mensal realizado (%) - dividendo do mês / valor investido hoje",
                     labels={"value": "YoC (%)", "mes": "Mês", "variable": "Série"},
                 )
                 fig_yoc.for_each_trace(lambda t: t.update(
@@ -146,7 +145,7 @@ with tab_proventos:
                 ))
                 st.plotly_chart(fig_yoc, use_container_width=True, key="linha_yoc_realizado")
                 st.caption(
-                    "O YoC realizado usa o valor investido **atual** em Ações/FIIs como base fixa "
+                    "O YoC realizado usa o valor investido atual em Ações/FIIs como base fixa "
                     "(não o valor investido em cada mês histórico), então serve para ver a tendência "
                     "de quanto sua carteira de hoje já teria rendido em dividendos mês a mês."
                 )
@@ -162,7 +161,7 @@ with tab_proventos:
             c2.write(row["categoria"])
             c3.write(f"R$ {row['valor']:,.2f}")
             c4.write(row["data"])
-            if c5.button("🗑️", key=f"del_prov_{row['id']}"):
+            if c5.button("Excluir", key=f"del_prov_{row['id']}"):
                 db.delete_provento(user_email, row["id"])
                 st.rerun()
     else:
