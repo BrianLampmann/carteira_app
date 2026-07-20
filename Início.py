@@ -4,14 +4,16 @@ import plotly.express as px
 from datetime import date
 
 import db
-from api import get_prices
+from api import get_prices, get_variacoes_diarias
 from auth import login_gate, sidebar_user_box
+from nav import render_sidebar_nav
 from style import apply_style
 
 st.set_page_config(page_title="Painel Geral", page_icon="", layout="wide")
 apply_style()
 db.init_db()
 user_email = login_gate()
+render_sidebar_nav(user_email)
 sidebar_user_box()
 
 st.title("Painel Geral")
@@ -39,6 +41,41 @@ for a in ativos:
 
 total_rf = sum(r["valor_investido"] for r in renda_fixa)
 total_geral = total_acoes + total_fiis + total_rf
+
+# ---------- Alertas configurados na tela "Alertas" ----------
+from alerts import calcular_alertas_disparados, TIPOS_LABEL
+
+
+@st.dialog("Alertas")
+def mostrar_popup_alertas(disparados):
+    st.write("As seguintes condições que você configurou foram atingidas:")
+    for al in disparados:
+        rotulo = TIPOS_LABEL.get(al["tipo"], al["tipo"])
+        escopo = al["ticker"] or "Carteira toda"
+        if al["tipo"] in ("variacao_pct_dia", "yoc_minimo", "concentracao_maxima"):
+            st.warning(f"{rotulo} ({escopo}): valor atual {al['valor_atual']:.2f}% - limite configurado: {al['limite']:.2f}%")
+        else:
+            st.warning(f"{rotulo} ({escopo}): valor atual R$ {al['valor_atual']:.2f} - limite configurado: R$ {al['limite']:.2f}")
+    st.caption("Gerencie ou desative esses alertas na tela 'Alertas'.")
+    if st.button("Fechar", use_container_width=True):
+        st.rerun()
+
+
+if not st.session_state.get("alertas_ja_verificados"):
+    st.session_state["alertas_ja_verificados"] = True
+
+    alertas_config = db.get_alertas(user_email)
+    tickers_para_variacao = [a["ticker"] for a in ativos]
+    variacoes = get_variacoes_diarias(tickers_para_variacao) if tickers_para_variacao else {}
+
+    disparados = calcular_alertas_disparados(alertas_config, ativos, precos, variacoes, total_geral)
+
+    if disparados:
+        for al in disparados:
+            db.add_alerta_historico(user_email, al["tipo"], al["ticker"], al["valor_atual"], al["limite"])
+        mostrar_popup_alertas(disparados)
+
+
 
 # ---------- Cartões principais ----------
 col1, col2, col3, col4 = st.columns(4)

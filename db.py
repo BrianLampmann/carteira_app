@@ -8,7 +8,7 @@ SQLite local (carteira.db) - útil para testar sem depender da nuvem.
 """
 import sqlite3
 from pathlib import Path
-from datetime import date
+from datetime import date, datetime
 
 import streamlit as st
 
@@ -62,7 +62,11 @@ def init_db():
         email TEXT PRIMARY KEY,
         salt TEXT NOT NULL,
         senha_hash TEXT NOT NULL,
-        criado_em TEXT
+        criado_em TEXT,
+        nome_completo TEXT,
+        telefone TEXT,
+        perfil_investidor TEXT,
+        objetivo TEXT
     );
 
     CREATE TABLE IF NOT EXISTS ativos (
@@ -74,6 +78,7 @@ def init_db():
         quantidade REAL NOT NULL,
         preco_medio REAL NOT NULL,
         preco_teto REAL,
+        preco_chao REAL,
         dividendo_anual REAL DEFAULT 0
     );
 
@@ -136,21 +141,59 @@ def init_db():
         valor REAL DEFAULT 0,
         UNIQUE(email, tipo, categoria, ano, mes)
     );
+
+    CREATE TABLE IF NOT EXISTS alertas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        tipo TEXT NOT NULL,
+        ticker TEXT,
+        valor_limite REAL NOT NULL,
+        ativo INTEGER DEFAULT 1,
+        criado_em TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS alertas_historico (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        tipo TEXT NOT NULL,
+        ticker TEXT,
+        valor_no_disparo REAL,
+        limite REAL,
+        disparado_em TEXT
+    );
     """)
     conn.commit()
+
+    # Migração para bancos já existentes (CREATE TABLE IF NOT EXISTS não adiciona
+    # colunas novas em tabelas que já existiam antes desta versão do app).
+    migracoes = [
+        "ALTER TABLE usuarios ADD COLUMN nome_completo TEXT",
+        "ALTER TABLE usuarios ADD COLUMN telefone TEXT",
+        "ALTER TABLE usuarios ADD COLUMN perfil_investidor TEXT",
+        "ALTER TABLE usuarios ADD COLUMN objetivo TEXT",
+        "ALTER TABLE ativos ADD COLUMN preco_chao REAL",
+    ]
+    for sql_migracao in migracoes:
+        try:
+            conn.execute(sql_migracao)
+            conn.commit()
+        except Exception:
+            pass  # coluna já existe, ignora
+
     conn.close()
 
 
 # ---------- USUÁRIOS (contas) ----------
-def add_user(email, salt, senha_hash):
+def add_user(email, salt, senha_hash, nome_completo="", telefone="", perfil_investidor="", objetivo=""):
     conn = get_conn()
     try:
         existente = _to_dict(conn.execute("SELECT 1 FROM usuarios WHERE email=?", (email,)))
         if existente:
             return False
         conn.execute(
-            "INSERT INTO usuarios (email, salt, senha_hash, criado_em) VALUES (?,?,?,?)",
-            (email, salt, senha_hash, str(date.today())),
+            "INSERT INTO usuarios (email, salt, senha_hash, criado_em, nome_completo, telefone, perfil_investidor, objetivo) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (email, salt, senha_hash, str(date.today()), nome_completo, telefone, perfil_investidor, objetivo),
         )
         conn.commit()
         return True
@@ -167,13 +210,13 @@ def get_user(email):
 
 
 # ---------- ATIVOS ----------
-def add_ativo(email, ticker, tipo, setor, quantidade, preco_medio, preco_teto, dividendo_anual):
+def add_ativo(email, ticker, tipo, setor, quantidade, preco_medio, preco_teto, dividendo_anual, preco_chao=None):
     conn = get_conn()
     try:
         conn.execute(
-            "INSERT INTO ativos (email, ticker, tipo, setor, quantidade, preco_medio, preco_teto, dividendo_anual) "
-            "VALUES (?,?,?,?,?,?,?,?)",
-            (email, ticker.upper(), tipo, setor, quantidade, preco_medio, preco_teto, dividendo_anual),
+            "INSERT INTO ativos (email, ticker, tipo, setor, quantidade, preco_medio, preco_teto, dividendo_anual, preco_chao) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (email, ticker.upper(), tipo, setor, quantidade, preco_medio, preco_teto, dividendo_anual, preco_chao),
         )
         conn.commit()
     finally:
@@ -186,10 +229,10 @@ def replace_ativos(email, lista):
         conn.execute("DELETE FROM ativos WHERE email=?", (email,))
         for a in lista:
             conn.execute(
-                "INSERT INTO ativos (email, ticker, tipo, setor, quantidade, preco_medio, preco_teto, dividendo_anual) "
-                "VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT INTO ativos (email, ticker, tipo, setor, quantidade, preco_medio, preco_teto, dividendo_anual, preco_chao) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
                 (email, a["ticker"].upper(), a["tipo"], a["setor"], a["quantidade"],
-                 a["preco_medio"], a["preco_teto"], a["dividendo_anual"]),
+                 a["preco_medio"], a["preco_teto"], a["dividendo_anual"], a.get("preco_chao")),
             )
         conn.commit()
     finally:
@@ -202,6 +245,8 @@ def get_ativos(email):
         return _to_dicts(conn.execute("SELECT * FROM ativos WHERE email=? ORDER BY tipo, ticker", (email,)))
     finally:
         conn.close()
+
+
 def delete_ativo(email, id_):
     conn = get_conn()
     try:
@@ -209,6 +254,7 @@ def delete_ativo(email, id_):
         conn.commit()
     finally:
         conn.close()
+
 
 # ---------- RENDA FIXA ----------
 def add_renda_fixa(email, nome, categoria, valor_investido, taxa, data_aplicacao):
@@ -243,6 +289,8 @@ def get_renda_fixa(email):
         return _to_dicts(conn.execute("SELECT * FROM renda_fixa WHERE email=? ORDER BY categoria, nome", (email,)))
     finally:
         conn.close()
+
+
 def delete_renda_fixa(email, id_):
     conn = get_conn()
     try:
@@ -432,6 +480,7 @@ def get_anos_contab(email):
         conn.close()
     return [r["ano"] for r in linhas]
 
+
 def get_todos_lancamentos(email):
     """Retorna todos os lançamentos de contabilidade mensal do usuário, de todos
     os anos e tipos, em formato tabular (útil para exportação)."""
@@ -441,6 +490,75 @@ def get_todos_lancamentos(email):
             "SELECT tipo, categoria, ano, mes, valor FROM contab_lancamentos "
             "WHERE email=? ORDER BY ano, mes, tipo, categoria",
             (email,),
+        ))
+    finally:
+        conn.close()
+
+
+# ---------- ALERTAS ----------
+def add_alerta(email, tipo, ticker, valor_limite, ativo=True):
+    conn = get_conn()
+    try:
+        conn.execute(
+            "INSERT INTO alertas (email, tipo, ticker, valor_limite, ativo, criado_em) VALUES (?,?,?,?,?,?)",
+            (email, tipo, ticker, valor_limite, int(bool(ativo)), str(date.today())),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_alertas(email):
+    conn = get_conn()
+    try:
+        return _to_dicts(conn.execute(
+            "SELECT * FROM alertas WHERE email=? ORDER BY tipo, ticker", (email,)
+        ))
+    finally:
+        conn.close()
+
+
+def update_alerta(email, id_, valor_limite, ativo):
+    conn = get_conn()
+    try:
+        conn.execute(
+            "UPDATE alertas SET valor_limite=?, ativo=? WHERE id=? AND email=?",
+            (valor_limite, int(bool(ativo)), id_, email),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_alerta(email, id_):
+    conn = get_conn()
+    try:
+        conn.execute("DELETE FROM alertas WHERE id=? AND email=?", (id_, email))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ---------- HISTÓRICO DE ALERTAS ----------
+def add_alerta_historico(email, tipo, ticker, valor_no_disparo, limite):
+    conn = get_conn()
+    try:
+        conn.execute(
+            "INSERT INTO alertas_historico (email, tipo, ticker, valor_no_disparo, limite, disparado_em) "
+            "VALUES (?,?,?,?,?,?)",
+            (email, tipo, ticker, valor_no_disparo, limite, datetime.now().isoformat(timespec="seconds")),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_alertas_historico(email, limite=50):
+    conn = get_conn()
+    try:
+        return _to_dicts(conn.execute(
+            "SELECT * FROM alertas_historico WHERE email=? ORDER BY disparado_em DESC LIMIT ?",
+            (email, limite),
         ))
     finally:
         conn.close()

@@ -5,6 +5,7 @@ from datetime import date
 import db
 from api import get_prices
 from auth import login_gate, sidebar_user_box
+from nav import render_sidebar_nav
 from style import apply_style, tabela_carteira
 from export import dataframes_to_excel_bytes
 
@@ -12,6 +13,7 @@ st.set_page_config(page_title="Carteira Principal", page_icon="", layout="wide")
 apply_style()
 db.init_db()
 user_email = login_gate()
+render_sidebar_nav(user_email)
 sidebar_user_box()
 
 
@@ -69,13 +71,13 @@ tab_acoes_fiis, tab_renda_fixa = st.tabs(["Ações e FIIs", "Renda Fixa"])
 # =========================================================
 with tab_acoes_fiis:
     st.subheader("Cadastro de ativos")
-    st.caption("Preencha ticker, tipo, setor, quantidade, preço médio, preço teto e o dividendo pago nos últimos 12 meses por cota/ação. O resto é calculado automaticamente.")
+    st.caption("Preencha ticker, tipo, setor, quantidade, preço médio, preço teto, preço chão e o dividendo pago nos últimos 12 meses por cota/ação. O resto é calculado automaticamente.")
 
     df_edit = pd.DataFrame(ativos) if ativos else pd.DataFrame(
-        columns=["ticker", "tipo", "setor", "quantidade", "preco_medio", "preco_teto", "dividendo_anual"]
+        columns=["ticker", "tipo", "setor", "quantidade", "preco_medio", "preco_teto", "preco_chao", "dividendo_anual"]
     )
     if not df_edit.empty:
-        df_edit = df_edit[["ticker", "tipo", "setor", "quantidade", "preco_medio", "preco_teto", "dividendo_anual"]]
+        df_edit = df_edit[["ticker", "tipo", "setor", "quantidade", "preco_medio", "preco_teto", "preco_chao", "dividendo_anual"]]
 
     col_tabela, col_excluir = st.columns([4, 1])
 
@@ -91,7 +93,8 @@ with tab_acoes_fiis:
                 "setor": st.column_config.TextColumn("Setor", help="Ex: Bancos, Energia Elétrica, Mineração..."),
                 "quantidade": st.column_config.NumberColumn("Quant.", min_value=0, step=1, required=True),
                 "preco_medio": st.column_config.NumberColumn("Preço médio", min_value=0.0, format="R$ %.2f", required=True),
-                "preco_teto": st.column_config.NumberColumn("Preço teto", min_value=0.0, format="R$ %.2f"),
+                "preco_teto": st.column_config.NumberColumn("Preço teto", min_value=0.0, format="R$ %.2f", help="Alerta quando o preço atual atingir ou ultrapassar este valor"),
+                "preco_chao": st.column_config.NumberColumn("Preço chão", min_value=0.0, format="R$ %.2f", help="Alerta quando o preço atual cair para este valor ou menos"),
                 "dividendo_anual": st.column_config.NumberColumn("Div Unit 12m", min_value=0.0, format="R$ %.2f"),
             },
             key="editor_ativos",
@@ -109,6 +112,7 @@ with tab_acoes_fiis:
                     "quantidade": float(row.get("quantidade") or 0),
                     "preco_medio": float(row.get("preco_medio") or 0),
                     "preco_teto": float(row["preco_teto"]) if not pd.isna(row.get("preco_teto")) else None,
+                    "preco_chao": float(row["preco_chao"]) if not pd.isna(row.get("preco_chao")) else None,
                     "dividendo_anual": float(row["dividendo_anual"]) if not pd.isna(row.get("dividendo_anual")) else 0,
                 })
             db.replace_ativos(user_email, lista)
@@ -172,7 +176,7 @@ with tab_acoes_fiis:
                 "Preço médio": a["preco_medio"], "Valor Investido": valor_investido,
                 "Preço atual": preco_atual or a["preco_medio"],
                 "Valor atual": valor_atual, "Valorização": valorizacao_pct,
-                "Preço teto": a["preco_teto"], "Margem": margem_pct,
+                "Preço teto": a["preco_teto"], "Margem": margem_pct, "Preço chão": a.get("preco_chao"),
                 "Div Unit 12m": a["dividendo_anual"], "YoC": yoc, "YoC m": yoc_m,
             })
 
@@ -181,13 +185,13 @@ with tab_acoes_fiis:
         df["Posição"] = df["Valor atual"] / total_valor_atual * 100
 
         cols_order = ["Ativos", "Setor", "Quant.", "Preço médio", "Valor Investido", "Posição",
-                      "Preço atual", "Valor atual", "Valorização", "Preço teto", "Margem",
+                      "Preço atual", "Valor atual", "Valorização", "Preço teto", "Margem", "Preço chão",
                       "Div Unit 12m", "YoC", "YoC m"]
 
         formatos = {
             "Quant.": "{:.0f}", "Preço médio": "R$ {:.2f}", "Valor Investido": "R$ {:.2f}",
             "Posição": "{:.2f}%", "Preço atual": "R$ {:.2f}", "Valor atual": "R$ {:.2f}",
-            "Valorização": "{:+.2f}%", "Preço teto": "R$ {:.2f}", "Margem": "{:+.2f}%",
+            "Valorização": "{:+.2f}%", "Preço teto": "R$ {:.2f}", "Margem": "{:+.2f}%", "Preço chão": "R$ {:.2f}",
             "Div Unit 12m": "R$ {:.2f}", "YoC": "{:.2f}%", "YoC m": "{:.2f}%",
         }
 

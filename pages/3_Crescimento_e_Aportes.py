@@ -6,12 +6,14 @@ from export import dataframes_to_excel_bytes
 
 import db
 from auth import login_gate, sidebar_user_box
+from nav import render_sidebar_nav
 from style import apply_style
 
 st.set_page_config(page_title="Crescimento e Aportes", page_icon="", layout="wide")
 apply_style()
 db.init_db()
 user_email = login_gate()
+render_sidebar_nav(user_email)
 sidebar_user_box()
 
 st.title("Crescimento e Aportes")

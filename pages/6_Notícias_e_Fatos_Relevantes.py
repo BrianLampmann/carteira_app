@@ -4,12 +4,14 @@ import pandas as pd
 import db
 from api import get_news
 from auth import login_gate, sidebar_user_box
+from nav import render_sidebar_nav
 from style import apply_style
 
-st.set_page_config(page_title="Notícias e Fatos Relevantes", page_icon="📰", layout="wide")
+st.set_page_config(page_title="Notícias e Fatos Relevantes", page_icon="", layout="wide")
 apply_style()
 db.init_db()
 user_email = login_gate()
+render_sidebar_nav(user_email)
 sidebar_user_box()
 
 st.title("Notícias e Fatos Relevantes")
@@ -49,8 +51,8 @@ def renderizar_card(n):
         else:
             st.markdown(
                 "<div style='background:#1a1f2b; border-radius:8px; height:90px; "
-                "display:flex; align-items:center; justify-content:center; color:#5a6474;'>"
-                "📰</div>",
+                "display:flex; align-items:center; justify-content:center; color:#5a6474; font-size:12px;'>"
+                "Sem imagem</div>",
                 unsafe_allow_html=True,
             )
     with col_txt:
@@ -58,7 +60,7 @@ def renderizar_card(n):
             st.markdown(f"**[{n['titulo']}]({n['link']})**")
         else:
             st.markdown(f"**{n['titulo']}**")
-        linha_meta = f"🏷️ {n.get('ticker', '')} · {n.get('publisher', '—')}"
+        linha_meta = f"{n.get('ticker', '')} · {n.get('publisher', '—')}"
         if data_fmt:
             linha_meta += f" · {data_fmt}"
         st.caption(linha_meta)
@@ -69,7 +71,7 @@ tab_por_ativo, tab_tudo = st.tabs(["Por ativo", "Todas juntas (mais recentes pri
 
 with tab_por_ativo:
     for ticker in tickers:
-        with st.expander(f"📌 {ticker}", expanded=False):
+        with st.expander(ticker, expanded=False):
             with st.spinner(f"Buscando notícias de {ticker}..."):
                 noticias = get_news(ticker)
 

@@ -56,12 +56,27 @@ def login_gate():
         with tab_criar:
             st.caption("Cada pessoa cria sua própria conta e define sua própria senha.")
             with st.form("signup_form"):
+                nome_completo = st.text_input("Nome completo", key="signup_nome")
                 novo_email = st.text_input("E-mail", key="signup_email")
+                telefone = st.text_input("Telefone/WhatsApp (opcional)", key="signup_telefone")
+                perfil_investidor = st.selectbox(
+                    "Perfil de investidor",
+                    ["Conservador", "Moderado", "Arrojado"],
+                    key="signup_perfil",
+                )
+                objetivo = st.selectbox(
+                    "Objetivo principal",
+                    ["Reserva de emergência", "Renda passiva", "Aposentadoria",
+                     "Crescimento de patrimônio", "Outro"],
+                    key="signup_objetivo",
+                )
                 nova_senha = st.text_input("Crie uma senha", type="password", key="signup_pass")
                 confirmar = st.text_input("Confirme a senha", type="password", key="signup_pass2")
                 criar = st.form_submit_button("Criar conta", type="primary", use_container_width=True)
                 if criar:
-                    if not _is_valid_email(novo_email):
+                    if not nome_completo.strip():
+                        st.error("Digite seu nome completo.")
+                    elif not _is_valid_email(novo_email):
                         st.error("Digite um e-mail válido.")
                     elif len(nova_senha) < 6:
                         st.error("A senha precisa ter pelo menos 6 caracteres.")
@@ -69,7 +84,11 @@ def login_gate():
                         st.error("As senhas não coincidem.")
                     else:
                         salt, hash_ = _hash_password(nova_senha)
-                        ok = db.add_user(novo_email.strip().lower(), salt, hash_)
+                        ok = db.add_user(
+                            novo_email.strip().lower(), salt, hash_,
+                            nome_completo=nome_completo.strip(), telefone=telefone.strip(),
+                            perfil_investidor=perfil_investidor, objetivo=objetivo,
+                        )
                         if ok:
                             st.session_state["user_email"] = novo_email.strip().lower()
                             st.rerun()

@@ -55,6 +55,48 @@ def get_prices(tickers: list):
     return result
 
 
+@st.cache_data(ttl=900, show_spinner=False)
+def get_variacoes_diarias(tickers: list):
+    """Retorna dict {ticker: variacao_percentual_do_dia}, usando os dois últimos
+    fechamentos disponíveis (mesma requisição em lote do get_prices)."""
+    if not tickers:
+        return {}
+
+    tickers_upper = [t.upper() for t in tickers]
+    yf_symbols = [f"{t}.SA" for t in tickers_upper]
+
+    try:
+        dados = yf.download(
+            yf_symbols,
+            period="5d",
+            interval="1d",
+            progress=False,
+            group_by="ticker",
+            threads=False,
+            auto_adjust=True,
+        )
+    except Exception:
+        return {}
+
+    if dados is None or dados.empty:
+        return {}
+
+    eh_multiindex = isinstance(dados.columns, pd.MultiIndex)
+
+    result = {}
+    for ticker, symbol in zip(tickers_upper, yf_symbols):
+        try:
+            serie = (dados[symbol]["Close"] if eh_multiindex else dados["Close"]).dropna()
+            if len(serie) >= 2:
+                anterior, atual = float(serie.iloc[-2]), float(serie.iloc[-1])
+                if anterior:
+                    result[ticker] = (atual - anterior) / anterior * 100
+        except Exception:
+            continue
+
+    return result
+
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def get_news(ticker: str, limit: int = 5):
     """Busca notícias/fatos relevantes recentes de um ticker via Yahoo Finance.
