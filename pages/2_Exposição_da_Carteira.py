@@ -7,7 +7,7 @@ from api import get_prices
 from auth import login_gate, sidebar_user_box
 from style import apply_style
 
-st.set_page_config(page_title="Exposição da Carteira", page_icon="🥧", layout="wide")
+st.set_page_config(page_title="Exposição da Carteira", page_icon="", layout="wide")
 apply_style()
 db.init_db()
 user_email = login_gate()
