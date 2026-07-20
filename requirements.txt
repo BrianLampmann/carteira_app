@@ -4,3 +4,5 @@ plotly>=5.20
 requests>=2.31
 matplotlib>=3.8
 yfinance>=0.2.40
+libsql>=0.1.11
+openpyxl>=3.1

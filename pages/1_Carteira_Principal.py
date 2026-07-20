@@ -13,8 +13,21 @@ db.init_db()
 user_email = login_gate()
 sidebar_user_box()
 
-st.title("📊 Carteira Principal")
+from export import dataframes_to_excel_bytes
+...
+st.title("Carteira Principal")
 
+col_titulo, col_download = st.columns([5, 1])
+with col_download:
+    excel_bytes = dataframes_to_excel_bytes({
+        "Ativos": pd.DataFrame(db.get_ativos(user_email)),
+        "Renda Fixa": pd.DataFrame(db.get_renda_fixa(user_email)),
+    })
+    st.download_button(
+        "Baixar (Excel)", data=excel_bytes,
+        file_name="carteira_principal.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 tab_acoes_fiis, tab_renda_fixa = st.tabs(["Ações e FIIs", "Renda Fixa"])
 
 # =========================================================
@@ -31,40 +44,58 @@ with tab_acoes_fiis:
     if not df_edit.empty:
         df_edit = df_edit[["ticker", "tipo", "setor", "quantidade", "preco_medio", "preco_teto", "dividendo_anual"]]
 
-    edited = st.data_editor(
-        df_edit,
-        num_rows="dynamic",
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "ticker": st.column_config.TextColumn("Ativo", required=True, help="Ex: PETR4, MXRF11"),
-            "tipo": st.column_config.SelectboxColumn("Tipo", options=["Ação", "FII"], required=True),
-            "setor": st.column_config.TextColumn("Setor", help="Ex: Bancos, Energia Elétrica, Mineração..."),
-            "quantidade": st.column_config.NumberColumn("Quant.", min_value=0, step=1, required=True),
-            "preco_medio": st.column_config.NumberColumn("Preço médio", min_value=0.0, format="R$ %.2f", required=True),
-            "preco_teto": st.column_config.NumberColumn("Preço teto", min_value=0.0, format="R$ %.2f"),
-            "dividendo_anual": st.column_config.NumberColumn("Div Unit 12m", min_value=0.0, format="R$ %.2f"),
-        },
-        key="editor_ativos",
-    )
+    col_tabela, col_excluir = st.columns([4, 1])
 
-    if st.button("💾 Salvar ativos", type="primary"):
-        lista = []
-        for _, row in edited.iterrows():
-            if pd.isna(row.get("ticker")) or str(row.get("ticker")).strip() == "":
-                continue
-            lista.append({
-                "ticker": str(row["ticker"]).strip(),
-                "tipo": row.get("tipo") or "Ação",
-                "setor": row.get("setor") or "",
-                "quantidade": float(row.get("quantidade") or 0),
-                "preco_medio": float(row.get("preco_medio") or 0),
-                "preco_teto": float(row["preco_teto"]) if not pd.isna(row.get("preco_teto")) else None,
-                "dividendo_anual": float(row["dividendo_anual"]) if not pd.isna(row.get("dividendo_anual")) else 0,
-            })
-        db.replace_ativos(user_email, lista)
-        st.success("Ativos salvos!")
-        st.rerun()
+    with col_tabela:
+        edited = st.data_editor(
+            df_edit,
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "ticker": st.column_config.TextColumn("Ativo", required=True, help="Ex: PETR4, MXRF11"),
+                "tipo": st.column_config.SelectboxColumn("Tipo", options=["Ação", "FII"], required=True),
+                "setor": st.column_config.TextColumn("Setor", help="Ex: Bancos, Energia Elétrica, Mineração..."),
+                "quantidade": st.column_config.NumberColumn("Quant.", min_value=0, step=1, required=True),
+                "preco_medio": st.column_config.NumberColumn("Preço médio", min_value=0.0, format="R$ %.2f", required=True),
+                "preco_teto": st.column_config.NumberColumn("Preço teto", min_value=0.0, format="R$ %.2f"),
+                "dividendo_anual": st.column_config.NumberColumn("Div Unit 12m", min_value=0.0, format="R$ %.2f"),
+            },
+            key="editor_ativos",
+        )
+
+        if st.button("Salvar ativos", type="primary"):
+            lista = []
+            for _, row in edited.iterrows():
+                if pd.isna(row.get("ticker")) or str(row.get("ticker")).strip() == "":
+                    continue
+                lista.append({
+                    "ticker": str(row["ticker"]).strip(),
+                    "tipo": row.get("tipo") or "Ação",
+                    "setor": row.get("setor") or "",
+                    "quantidade": float(row.get("quantidade") or 0),
+                    "preco_medio": float(row.get("preco_medio") or 0),
+                    "preco_teto": float(row["preco_teto"]) if not pd.isna(row.get("preco_teto")) else None,
+                    "dividendo_anual": float(row["dividendo_anual"]) if not pd.isna(row.get("dividendo_anual")) else 0,
+                })
+            db.replace_ativos(user_email, lista)
+            st.success("Ativos salvos!")
+            st.rerun()
+
+    with col_excluir:
+        st.markdown("**Excluir ativo**")
+        if ativos:
+            ticker_selecionado = st.selectbox(
+                "Selecione o ativo",
+                options=[a["ticker"] for a in ativos],
+                label_visibility="collapsed",
+                key="select_del_ativo",
+            )
+            if st.button("Excluir", use_container_width=True):
+                alvo = next(a for a in ativos if a["ticker"] == ticker_selecionado)
+                db.delete_ativo(user_email, alvo["id"])
+                st.success(f"{ticker_selecionado} excluído!")
+                st.rerun()
 
     st.divider()
     st.subheader("Resumo da carteira")
@@ -150,6 +181,7 @@ with tab_acoes_fiis:
         col2.metric("Total em FIIs", f"R$ {total_fiis:,.2f}")
         col3.metric("Total Ações + FIIs", f"R$ {(total_acoes + total_fiis):,.2f}")
         col4.metric("Média YoC", f"{media_yoc:.2f}%")
+        
 
 # =========================================================
 # ABA: RENDA FIXA

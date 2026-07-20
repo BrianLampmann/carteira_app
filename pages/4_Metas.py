@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-
+from export import dataframes_to_excel_bytes
 import db
 from api import get_prices
 from auth import login_gate, sidebar_user_box
@@ -13,8 +13,17 @@ db.init_db()
 user_email = login_gate()
 sidebar_user_box()
 
-st.title("🎯 Metas")
-
+st.title("Metas")
+col_titulo, col_download = st.columns([5, 1])
+with col_download:
+    excel_bytes = dataframes_to_excel_bytes({
+        "Metas": pd.DataFrame([db.get_metas(user_email)]),
+    })
+    st.download_button(
+        "Baixar (Excel)", data=excel_bytes,
+        file_name="metas.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 # ---------- Dados atuais da carteira ----------
 ativos = db.get_ativos(user_email)
 renda_fixa = db.get_renda_fixa(user_email)

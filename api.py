@@ -34,13 +34,19 @@ def get_prices(tickers: list):
     if dados is None or dados.empty:
         return {}
 
+    # Dependendo da versão do yfinance, o retorno pode vir com colunas em
+    # MultiIndex (ex: ('BBAS3.SA', 'Close')) mesmo para um único ticker, ou
+    # com colunas simples (ex: 'Close'). Detectamos o formato real em vez de
+    # assumir com base na quantidade de tickers pedidos.
+    eh_multiindex = isinstance(dados.columns, pd.MultiIndex)
+
     result = {}
     for ticker, symbol in zip(tickers_upper, yf_symbols):
         try:
-            if len(yf_symbols) == 1:
-                serie = dados["Close"].dropna()
-            else:
+            if eh_multiindex:
                 serie = dados[symbol]["Close"].dropna()
+            else:
+                serie = dados["Close"].dropna()
             if not serie.empty:
                 result[ticker] = float(serie.iloc[-1])
         except Exception:

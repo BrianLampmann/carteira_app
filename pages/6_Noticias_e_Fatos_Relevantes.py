@@ -12,7 +12,7 @@ db.init_db()
 user_email = login_gate()
 sidebar_user_box()
 
-st.title("📰 Notícias e Fatos Relevantes")
+st.title("Notícias e Fatos Relevantes")
 st.caption("Últimas notícias de cada ativo da sua carteira, via Yahoo Finance.")
 
 ativos = db.get_ativos(user_email)
@@ -23,7 +23,7 @@ if not ativos:
 
 tickers = sorted({a["ticker"] for a in ativos})
 
-if st.button("🔄 Atualizar notícias"):
+if st.button("Atualizar notícias"):
     get_news.clear()
 
 

@@ -34,6 +34,9 @@ def apply_style():
         button[kind="primary"] {
             border-radius: 8px;
         }
+        div[data-testid="stVerticalBlock"] div[data-testid="stHorizontalBlock"] {
+    margin-bottom: -0.7rem;
+}
         </style>
         """,
         unsafe_allow_html=True,

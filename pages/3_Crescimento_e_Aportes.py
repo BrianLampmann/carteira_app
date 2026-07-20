@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import date
+from export import dataframes_to_excel_bytes
 
 import db
 from auth import login_gate, sidebar_user_box
@@ -13,7 +14,19 @@ db.init_db()
 user_email = login_gate()
 sidebar_user_box()
 
-st.title("📈 Crescimento e Aportes")
+st.title("Crescimento e Aportes")
+
+col_titulo, col_download = st.columns([5, 1])
+with col_download:
+    excel_bytes = dataframes_to_excel_bytes({
+        "Patrimonio Historico": pd.DataFrame(db.get_patrimonio_historico(user_email)),
+        "Proventos": pd.DataFrame(db.get_proventos(user_email)),
+    })
+    st.download_button(
+        "Baixar (Excel)", data=excel_bytes,
+        file_name="crescimento_e_aportes.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 tab_patrimonio, tab_proventos = st.tabs(["Evolução Patrimonial", "Proventos Recebidos"])
 
@@ -28,7 +41,7 @@ with tab_patrimonio:
         data_lanc = c1.date_input("Data", value=date.today())
         valor_total = c2.number_input("Valor total do patrimônio (R$)", min_value=0.0, format="%.2f")
         aporte = c3.number_input("Aporte no período (R$)", min_value=0.0, format="%.2f")
-        enviar = st.form_submit_button("➕ Adicionar lançamento", type="primary")
+        enviar = st.form_submit_button("Adicionar lançamento", type="primary")
         if enviar:
             db.add_patrimonio(user_email, str(data_lanc), valor_total, aporte)
             st.success("Lançamento adicionado!")
@@ -72,7 +85,7 @@ with tab_proventos:
         categoria = c2.selectbox("Categoria", ["Dividendo/JCP", "Renda Fixa", "CDI", "FGTS"])
         valor = c3.number_input("Valor (R$)", min_value=0.0, format="%.2f")
         data_prov = c4.date_input("Data", value=date.today(), key="data_provento")
-        enviar_p = st.form_submit_button("➕ Adicionar provento", type="primary")
+        enviar_p = st.form_submit_button("Adicionar provento", type="primary")
         if enviar_p:
             if origem.strip():
                 db.add_provento(user_email, origem.strip(), categoria, valor, str(data_prov))

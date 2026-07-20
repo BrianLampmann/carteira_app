@@ -13,7 +13,7 @@ db.init_db()
 user_email = login_gate()
 sidebar_user_box()
 
-st.title("🥧 Exposição da Carteira")
+st.title("Exposição da Carteira")
 
 ativos = db.get_ativos(user_email)
 renda_fixa = db.get_renda_fixa(user_email)

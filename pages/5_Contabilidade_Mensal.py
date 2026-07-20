@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import date
+from export import dataframes_to_excel_bytes
 
 import db
 from auth import login_gate, sidebar_user_box
@@ -14,7 +15,19 @@ db.init_db()
 user_email = login_gate()
 sidebar_user_box()
 
-st.title("🧾 Contabilidade Mensal")
+st.title("Contabilidade Mensal")
+col_titulo, col_download = st.columns([5, 1])
+with col_download:
+    excel_bytes = dataframes_to_excel_bytes({
+        "Categorias Receita": pd.DataFrame(db.get_categorias(user_email, "Receita")),
+        "Categorias Despesa": pd.DataFrame(db.get_categorias(user_email, "Despesa")),
+        "Lancamentos": pd.DataFrame(db.get_todos_lancamentos(user_email)),
+    })
+    st.download_button(
+        "Baixar (Excel)", data=excel_bytes,
+        file_name="contabilidade_mensal.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
 
@@ -46,7 +59,7 @@ def editor_categorias(tipo, texto_especial, ajuda_especial):
         st.rerun()
 
 
-with st.expander("⚙️ Gerenciar categorias", expanded=False):
+with st.expander("Gerenciar categorias", expanded=False):
     col_a, col_b = st.columns(2)
     with col_a:
         editor_categorias(
@@ -70,7 +83,7 @@ col_novo1, col_novo2 = st.columns([1, 4])
 with col_novo1:
     novo_ano = st.number_input("Adicionar novo ano", min_value=2000, max_value=2100, value=ano_atual + 1, step=1, label_visibility="collapsed")
 with col_novo2:
-    if st.button("➕ Adicionar ano"):
+    if st.button("Adicionar ano"):
         db.save_lancamentos_ano(user_email, "Receita", int(novo_ano), {})
         st.rerun()
 
@@ -102,7 +115,7 @@ def grid_lancamentos(tipo, ano):
         key=f"grid_{tipo}_{ano}",
     )
 
-    if st.button(f"💾 Salvar {tipo.lower()}s de {ano}", key=f"btn_grid_{tipo}_{ano}"):
+    if st.button(f"Salvar {tipo.lower()}s de {ano}", key=f"btn_grid_{tipo}_{ano}"):
         dados = {}
         for _, row in edited.iterrows():
             dados[row["Categoria"]] = {i: float(row[m] or 0) for i, m in enumerate(MESES, start=1)}
