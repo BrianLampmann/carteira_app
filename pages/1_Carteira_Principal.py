@@ -13,6 +13,7 @@ db.init_db()
 user_email = login_gate()
 sidebar_user_box()
 
+
 from export import dataframes_to_excel_bytes
 ...
 st.title("Carteira Principal")

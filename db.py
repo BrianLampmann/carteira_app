@@ -202,7 +202,13 @@ def get_ativos(email):
         return _to_dicts(conn.execute("SELECT * FROM ativos WHERE email=? ORDER BY tipo, ticker", (email,)))
     finally:
         conn.close()
-
+def delete_ativo(email, id_):
+    conn = get_conn()
+    try:
+        conn.execute("DELETE FROM ativos WHERE id=? AND email=?", (id_, email))
+        conn.commit()
+    finally:
+        conn.close()
 
 # ---------- RENDA FIXA ----------
 def add_renda_fixa(email, nome, categoria, valor_investido, taxa, data_aplicacao):
@@ -235,6 +241,13 @@ def get_renda_fixa(email):
     conn = get_conn()
     try:
         return _to_dicts(conn.execute("SELECT * FROM renda_fixa WHERE email=? ORDER BY categoria, nome", (email,)))
+    finally:
+        conn.close()
+def delete_renda_fixa(email, id_):
+    conn = get_conn()
+    try:
+        conn.execute("DELETE FROM renda_fixa WHERE id=? AND email=?", (id_, email))
+        conn.commit()
     finally:
         conn.close()
 
